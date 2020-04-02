@@ -1,0 +1,3 @@
+[submodule "lib-qt-qml-tricks"]
+	path = lib-qt-qml-tricks
+	url = git@bitbucket.org:barbatum/lib-qt-qml-tricks.git
