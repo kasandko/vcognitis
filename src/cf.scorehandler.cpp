@@ -26,6 +26,7 @@ CFScoreHandler::CFScoreHandler(CFUserModel *userModel, int score, QObject *paren
             this, &CFScoreHandler::estimatedDurationChanged);
 
     initQuery(userModel);
+
 }
 
 double CFScoreHandler::progress() const
@@ -44,16 +45,45 @@ bool CFScoreHandler::initQuery(CFUserModel *userModel)
     m_query.prepare(selectStatement(userModel));
 
     if (!m_query.exec()) {
+        qWarning() << "[CFScoreHandler::initQuery] Can't exec query" << m_query.lastError();
         return false;
     }
 
     m_count = 0;
     while(m_query.next()) {
+        if (m_score != INVALID_VALUE
+                && m_query.value(QStringLiteral("scored")).toInt() == 1
+                && m_query.value(QStringLiteral("groupCount")).toInt() <= CF_GROUPS_COUNT
+                && m_query.value(QStringLiteral("groupCount")).toInt() > 1)
+            continue;
+
         m_count++;
         m_userIds.append(m_query.value(QStringLiteral("id")).toInt());
         m_userGroupIds[m_userIds.last()] = m_query.value(QStringLiteral("groupId")).toInt();
     }
 
+    return true;
+}
+
+bool CFScoreHandler::removePreviousData(int userId)
+{
+    m_query.prepare(QString("DELETE FROM UserInterest WHERE userId = :userId"));
+    m_query.bindValue(":userId", userId);
+    if (!m_query.exec()) {
+        qWarning() << "[CFScoreHandler::initQuery] Can't exec query userInterest" << m_query.lastError();
+
+        return false;
+    }
+
+    m_query.prepare(QString("DELETE FROM UserGroups WHERE userId = :userId"));
+
+    m_query.bindValue(":userId", userId);
+
+    if (!m_query.exec()) {
+        qWarning() << "[CFScoreHandler::initQuery] Can't exec query UserGroups" << m_query.lastError();
+
+        return false;
+    }
     return true;
 }
 
@@ -186,7 +216,6 @@ void CFScoreHandler::parseSubscriptions(QSharedPointer<QIODevice> replyData,
     }
 
     if (!hasGroupDownloadedFrom) {
-        groupIds << downloadedGroupId;
         CFGroup *group = groupModel->getByUid(QString::number(downloadedGroupId));
         if (group != nullptr)
             score += group->get_weight();
@@ -197,6 +226,7 @@ void CFScoreHandler::parseSubscriptions(QSharedPointer<QIODevice> replyData,
     QVariantList countInterests;
 
     QList<int> sortedList = interestMap.keys();
+
 
     // sort interest by their count
     std::sort(sortedList.begin(), sortedList.end(), [&interestMap](int left, int right) {
@@ -215,12 +245,17 @@ void CFScoreHandler::parseSubscriptions(QSharedPointer<QIODevice> replyData,
         }
     }
 
-
     // Add prepared data to DB
     QSqlDatabase::database().transaction();
 
-    // First user group pairs
     QSqlQuery query;
+
+    // But before adding new data - remove previous
+    if (m_score != INVALID_VALUE) {
+        removePreviousData(userId);
+    }
+
+    // Next user group pairs
     query.prepare(QStringLiteral("INSERT INTO UserGroups (userId, groupId) "
                                  "VALUES (%1, :groupId)").arg(userId));
     query.bindValue(QStringLiteral(":groupId"), groupIds);
@@ -337,17 +372,27 @@ void CFScoreHandler::errorWithServerOrConnection(int error,
 
 QString CFScoreHandler::selectStatement(CFUserModel *userModel)
 {
-    QString whereClause = userModel->whereClause();
+    QString whereClause = userModel->whereClause(false, false, true, m_score == INVALID_VALUE);
     if (whereClause.isEmpty()) {
         whereClause += "WHERE ";
     } else {
         whereClause += " AND ";
     }
 
-    whereClause += m_score != INVALID_VALUE ? QString("groupScore >= %1 AND ").arg(m_score) : "";
+    if (m_score != INVALID_VALUE) {
+        whereClause += QString("groupScore >= %1 ").arg(m_score);
 
+        return QString("SELECT DISTINCT Users.id, Users.groupId, Users.scored, COUNT(Users.id) as groupCount"
+                       " FROM Users LEFT JOIN UserGroups ON Users.id = UserGroups.userId ")
+               + whereClause
+               + " GROUP BY Users.id " + "LIMIT "
+               + QString::number(userModel->get_limit());
+    } else {
+        whereClause += "scored=0 ";
 
-    whereClause += "scored=0 LIMIT " + QString::number(userModel->get_limit());
+        whereClause += "scored=0 LIMIT " + QString::number(userModel->get_limit());
 
-    return "SELECT DISTINCT Users.id, Users.groupId FROM Users " + whereClause;
+        return "SELECT DISTINCT Users.id, Users.groupId FROM Users " + whereClause;
+    }
+
 }

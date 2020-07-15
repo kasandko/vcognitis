@@ -40,7 +40,7 @@ CFUserManager::CFUserManager(QObject *parent)
         m_countryModel->select();
     });
     connect(m_downloadQueue, &CFDownloadQueue::finished, [this]{
-        m_countryModel->select(); 
+        m_countryModel->select();
         m_notificationPlayer.play();
     });
     connect(m_downloadQueue, &CFDownloadQueue::error, [this](CFOpError *error){
@@ -294,9 +294,9 @@ QString CFUserManager::topAnalyzeWhereStatement()
         whereClause += " AND ";
     }
 
-    whereClause += "groupScore >= :score AND ";
+    whereClause += "groupScore >= :score ";
 
-    whereClause += "scored=0 LIMIT " + QString::number(m_model->get_limit());
+    whereClause += "LIMIT " + QString::number(m_model->get_limit());
 
     return whereClause;
 }
@@ -431,7 +431,7 @@ QPair<int, int> CFUserManager::topAnalyzeTimeScore(int timeInSec, bool wait)
                 query.bindValue(":score", middle);
 
                 if (!query.exec()) {
-                    qWarning() << "[CFUserManager::topAnalyzeTime] Can't exec query" << query.lastError();
+                    qWarning() << "[CFUserManager::topAnalyzeTimeScore] Can't exec query" << query.lastError();
 
                     return QPair<int, int>(-1, -1);
                 }
@@ -533,31 +533,6 @@ void CFUserManager::topAnalyze(int inScore, int allotteredTime)
         score = result.second;
     }
 
-    QString whereClause = topAnalyzeWhereStatement();
-
-    // Remove information from selected profiles
-    QSqlQuery query;
-
-    query.prepare(QString("DELETE FROM UserGroups WHERE userId IN (SELECT DISTINCT Users.id from Users %1)").arg(whereClause));
-
-    query.bindValue(":score", score);
-
-    if (!query.exec()) {
-        qWarning() << "[CFUserManager::topAnalyze] Can't exec query userGroups" << query.lastError();
-
-        return;
-    }
-
-    query.prepare(QString("DELETE FROM UserInterest WHERE userId IN (SELECT DISTINCT Users.id from Users %1)").arg(whereClause));
-
-    query.bindValue(":score", score);
-
-    if (!query.exec()) {
-        qWarning() << "[CFUserManager::topAnalyze] Can't exec query userInterest" << query.lastError();
-
-        return;
-    }
-
     update_score(new CFScoreHandler(m_model, score, this));
     connect(m_score, &CFScoreHandler::finished, [=]{
         if (inScore == INVALID_INDEX) {
@@ -588,7 +563,7 @@ void CFUserManager::initFriendsAndMyself()
 
     m_friendsAndMyself.insert(CFVkAuthManager::instance().get_userVkId().toInt());
 
-    // makeGetFriendsRequest(); // We decides not to remove friends from profile list
+    makeGetFriendsRequest();
 
     makeMeRequest();
 }

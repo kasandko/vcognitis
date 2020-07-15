@@ -282,14 +282,8 @@ void CFGroupAssertionHandler::getByIdSuccess(QSharedPointer<QIODevice> replyData
 
     int count = jsGroup.value(QLatin1String("members_count")).toInt();
 
-    if (count > CFGroupManager::instance().k_maxSubInGroup ||  count == 0) {
-        if (count == 0) {
-            emit errorAt(m_assertedRow, tr("Нет сведений о количестве подписчиков группы"));
-        } else {
-            emit errorAt(m_assertedRow,
-                         tr("В группе слишком много подписчиков(%1)").arg(CFUtils::subsToString(count)));
-        }
-
+    if (count == 0) {
+        emit errorAt(m_assertedRow, tr("Нет сведений о количестве подписчиков группы"));
 
         m_errorOccured = true;
         incrementAndProceed();

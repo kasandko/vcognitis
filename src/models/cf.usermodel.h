@@ -98,7 +98,7 @@ public:
      * \brief Builds and returns WHERE clause with all
      * conditions set accordingly to current filter properties
      */
-    QString whereClause(bool withViewed = false, bool viewedOnly = false, bool withAge = true) const;
+    QString whereClause(bool withViewed = false, bool viewedOnly = false, bool withAge = true, bool userGroupsFlag = true) const;
 
     /*!
      * \brief True if more users can be fetched from DB

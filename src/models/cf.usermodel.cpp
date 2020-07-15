@@ -192,8 +192,14 @@ void CFUserModel::fetchMore(const QModelIndex &parent)
 {
     Q_UNUSED(parent)
 
+    int offset = m_offset;
+    if (!m_showViewed) {
+        // Because viewed list is not static so offset does not applies in the same way as in static list
+        offset -= m_lastUpdatedViewedIndex;
+    }
+
     QSqlQuery query;
-    query.prepare(selectStatement(true, m_step, m_offset));
+    query.prepare(selectStatement(true, m_step, offset));
     if (!query.exec()) {
         return;
     }
@@ -531,12 +537,12 @@ void CFUserModel::updateViewedProfiles()
         qWarning() << "[CFUserManager::updateViewedProfiles] Sql query failed:" << query.lastError();
 }
 
-QString CFUserModel::whereClause(bool withViewed, bool viewedOnly, bool withAge) const
+QString CFUserModel::whereClause(bool withViewed, bool viewedOnly, bool withAge, bool userGroupsFlag) const
 {
     QString whereStr;
 
     // Group check uses JOIN that must be appended before WHERE keword
-    if (!m_groups.isEmpty()) {
+    if (!m_groups.isEmpty() && userGroupsFlag) {
         whereStr = "INNER JOIN UserGroups ON UserGroups.userId = Users.id ";
     }
 

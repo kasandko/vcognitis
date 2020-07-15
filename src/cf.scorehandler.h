@@ -98,6 +98,8 @@ private:
      */
     bool initQuery(CFUserModel *userModel);
 
+    bool removePreviousData(int userId);
+
     void endIteration(int id);
 
     void makeGetSubscriptionsRequest(int id);
